@@ -1,0 +1,18 @@
+{
+  "name": "나만의 유튜브",
+  "short_name": "나만의 유튜브",
+  "description": "고른 채널의 새 영상만 · 요약 · 나중에 볼 영상",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1d1d1f",
+  "theme_color": "#1d1d1f",
+  "lang": "ko",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
