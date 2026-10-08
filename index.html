@@ -7,7 +7,7 @@
      화면이 «떴음» 신호(postMessage)를 20초 안에 안 보내면 → 구글 로그인이 이 안에서 안 통하는 것으로 보고 «바로 열기» 단추를 보인다. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1d1d1f">
-<meta name="껍데기판" content="4">
+<meta name="껍데기판" content="5">
 <title>나만의 유튜브</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -44,7 +44,7 @@
     <a class="단추" id="바로">바로 열기</a>
     <button class="단추 옅게" id="다시">다시 시도</button>
   </div>
-  <div class="서명">DSM · 29 나만의 유튜브 · 껍데기판 4</div>
+  <div class="서명">DSM · 29 나만의 유튜브 · 껍데기판 5</div>
 </div>
 <script>
 // 구글 앱스 스크립트 화면 주소 — «배포 관리 → 새 버전» 으로만 올리므로 바뀌지 않는다 (29번 CLAUDE.md ⑤)
@@ -55,14 +55,17 @@ const 기본화면주소 = (이PC && new URLSearchParams(location.search).get('�
 // 껍데기판 4 (10-08) — 유튜브 앱 «공유» → «나만의 유튜브» 로 열렸을 때 : 크롬이 ?title=…&text=…&url=… 를 붙여 엶 (manifest share_target)
 //   받은 글 속 유튜브 주소에서 영상 번호(11글자)만 골라 화면에 «share=번호» 로 넘김 → 화면이 요약을 저절로 시작 (화면 v0.29)
 //   영상 파일은 받지 않음 — 유튜브 «공유» 는 주소 글만 보냄
-const 받은 = new URLSearchParams(location.search);
-const 받은글 = [받은.get('url'), 받은.get('text'), 받은.get('title')].filter(Boolean).join(' ');
-const 영상번호 = (받은글.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|live\/|embed\/|watch\?(?:\S*?&)?v=))([A-Za-z0-9_-]{11})/) || [])[1] || '';
-let 받은제목 = (받은.get('title') || '').trim();
-if (/^https?:/i.test(받은제목)) 받은제목 = '';      // 제목 칸에 주소가 오는 앱도 있음
-const 화면주소 = 영상번호
-  ? 기본화면주소 + (기본화면주소.indexOf('?') >= 0 ? '&' : '?') + 'share=' + 영상번호 + (받은제목 ? '&st=' + encodeURIComponent(받은제목.slice(0, 200)) : '')
-  : 기본화면주소;
+function 공유고르기(검색) {                          // ?title=&text=&url= → {번호, 제목}
+  const 받은 = new URLSearchParams(검색);
+  const 받은글 = [받은.get('url'), 받은.get('text'), 받은.get('title')].filter(Boolean).join(' ');
+  const 번호 = (받은글.match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|live\/|embed\/|watch\?(?:\S*?&)?v=))([A-Za-z0-9_-]{11})/) || [])[1] || '';
+  let 제목 = (받은.get('title') || '').trim();
+  if (/^https?:/i.test(제목)) 제목 = '';             // 제목 칸에 주소가 오는 앱도 있음
+  return {번호: 번호, 제목: 제목.slice(0, 200)};
+}
+const 공유주소 = (번호, 제목) => 기본화면주소 + (기본화면주소.indexOf('?') >= 0 ? '&' : '?') + 'share=' + 번호 + (제목 ? '&st=' + encodeURIComponent(제목) : '');
+const 첫공유 = 공유고르기(location.search), 영상번호 = 첫공유.번호;
+let 화면주소 = 영상번호 ? 공유주소(영상번호, 첫공유.제목) : 기본화면주소;
 if (영상번호) history.replaceState(null, '', location.pathname + '?app=2');   // 주소 줄을 비워 둠 — 새로 고쳐도 같은 공유를 또 받지 않게
 const 기다림초 = 20;
 
@@ -88,9 +91,37 @@ function 열기() {
 window.addEventListener('message', e => {
   const 글 = e.data && e.data.나만의유튜브;
   if (!글) return;
+  if (글 === '공유받음') { clearTimeout(공유답시계); return; }   // 껍데기판 5 — 화면이 공유를 받았음
   떴음 = true;
   clearTimeout(시계);
   덮개.classList.add('걷힘');             // '못받음' 이어도 걷는다 — 화면이 스스로 오류 글을 보여 줌
+  건넬것.splice(0).forEach(x => 공유건네기(x.번호, x.제목));   // 뜨기 전에 들어온 공유 — 이제 건넴
+});
+
+// 껍데기판 5 (10-08 전무님 «쇼츠를 계속 보내면 들어오는 순서대로 바로바로 요약») —
+//   앱이 떠 있는 채로 또 공유하면 크롬이 창을 새로 열지 않고(manifest launch_handler focus-existing) launchQueue 로 알려 줌
+//   → 안쪽 화면(구글 틀 속 틀)에 postMessage 로 영상 번호를 건넴 → 화면(v0.31)이 목록에 더하고 차례로 요약
+//   → 4초 안에 «공유받음» 답이 없으면(옛 화면 · 길이 막힘) 그 주소로 화면을 새로 엶. 이 기능이 없는 폰은 크롬이 늘 새로 엶 → 화면이 주소로 받음
+let 공유답시계 = null;
+const 건넬것 = [];
+function 안에뿌리기(창, 말) {                         // 구글 화면은 틀 속 틀 — 모든 아래 틀에 보냄 (받는 쪽이 맨 위 창에서 온 것만 받음)
+  try { for (let i = 0; i < 창.frames.length; i++) { 창.frames[i].postMessage(말, '*'); 안에뿌리기(창.frames[i], 말); } } catch (e) { /* 못 닿는 틀은 건너뜀 */ }
+}
+function 공유건네기(번호, 제목) {
+  if (!떴음) { 건넬것.push({번호: 번호, 제목: 제목}); return; }
+  const 말 = {나만의유튜브공유: 번호, 제목: 제목};
+  try { 앱.contentWindow.postMessage(말, '*'); } catch (e) { /* 아래 틀로 */ }
+  안에뿌리기(앱.contentWindow, 말);
+  clearTimeout(공유답시계);
+  공유답시계 = setTimeout(() => { 화면주소 = 공유주소(번호, 제목); 열기(); }, 4000);
+}
+if ('launchQueue' in window) launchQueue.setConsumer(p => {
+  if (!p || !p.targetURL) return;
+  let 검색 = '';
+  try { 검색 = new URL(p.targetURL).search; } catch (e) { return; }
+  const 공 = 공유고르기(검색);
+  if (!공.번호 || 공.번호 === 영상번호) return;           // 처음 열 때 주소로 이미 받은 것
+  공유건네기(공.번호, 공.제목);
 });
 
 document.getElementById('다시').addEventListener('click', 열기);
